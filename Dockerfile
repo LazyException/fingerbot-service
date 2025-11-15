@@ -2,7 +2,6 @@ FROM node:20-bullseye
 
 # Installer git, Python, gcc/g++, make, et bluez pour le BLE
 RUN apt-get update && apt-get install -y \
-    git \
     python3 \
     make \
     g++ \

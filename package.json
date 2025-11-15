@@ -9,5 +9,6 @@
   },
   "dependencies": {
     "express": "^4.19.0",
-    "node-switchbot": "git+https://github.com/OpenWonderLabs/node-switchbot.git"  }
+    "@openwonderlabs/node-switchbot": "^0.1.0"
+ }
 }
