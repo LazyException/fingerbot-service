@@ -1,41 +1,35 @@
-import Switchbot from "switchbot-ble";
-import { FINGERBOT_MAC, SCAN_DURATION } from "./config.js";
+import Switchbot from 'node-switchbot';
+import { FINGERBOT_MAC, SCAN_DURATION } from './config.js';
+
+export async function scanFingerbot() {
+  const switchbot = new Switchbot();
+  
+  const devices = await switchbot.discover({
+    duration: SCAN_DURATION
+  });
+
+  const bot = devices.find(d => d.address === FINGERBOT_MAC || d.serviceData?.model === "f");
+  
+  if (!bot) return null;
+
+  return {
+    address: bot.address,
+    modelName: "WoFingerbot",
+    rssi: bot.rssi
+  };
+}
 
 export async function pressFingerbot() {
-  if (!FINGERBOT_MAC) throw new Error("FINGERBOT_MAC non défini dans .env");
-
   const switchbot = new Switchbot();
-
+  
   const devices = await switchbot.discover({
-    duration: SCAN_DURATION,
-    model: "WoFingerbot"
+    duration: SCAN_DURATION
   });
 
   const bot = devices.find(d => d.address === FINGERBOT_MAC);
 
   if (!bot) throw new Error("Fingerbot introuvable");
 
-  await bot.connect();
-  await bot.run();
-  await bot.disconnect();
-}
-
-export async function scanFingerbot() {
-  const switchbot = new Switchbot();
-
-  const devices = await switchbot.discover({
-    duration: SCAN_DURATION,
-    model: "WoFingerbot"
-  });
-
-  if (devices.length === 0) return null;
-
-  // On retourne le premier Fingerbot détecté
-  const bot = devices[0];
-
-  return {
-    address: bot.address,
-    modelName: bot.modelName,
-    rssi: bot.rssi
-  };
+  const device = await switchbot.wait(bot.address);
+  await device.press();
 }
