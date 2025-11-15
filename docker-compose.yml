@@ -1,5 +1,15 @@
 version: "3.9"
 services:
+  ble-service:
+    container_name: ble-service
+    build: ./ble-service
+    environment:
+      FINGERBOT_MAC: ${FINGERBOT_MAC}
+      SCAN_DURATION: ${SCAN_DURATION:-5}
+    network_mode: host
+    privileged: true
+    restart: unless-stopped
+
   fingerbot-api:
     container_name: fingerbot-api
     build: .
@@ -7,8 +17,10 @@ services:
       FINGERBOT_MAC: ${FINGERBOT_MAC}
       SECRET_API_KEY: ${SECRET_API_KEY}
       PORT: 3000
+      BLE_SERVICE_URL: http://localhost:4000
     network_mode: host
-    privileged: true
+    depends_on:
+      - ble-service
     restart: unless-stopped
 
   reverse-proxy:

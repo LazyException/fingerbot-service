@@ -1,6 +1,6 @@
 # 🤖 Fingerbot Service
 
-Microservice Node.js dockerisé pour piloter un **Switchbot Fingerbot** via Bluetooth Low Energy (BLE) et exposer une API REST sécurisée accessible sur Internet via **Cloudflare Tunnel**.
+Microservice dockerisé pour piloter un **Switchbot Fingerbot** via Bluetooth Low Energy (BLE) et exposer une API REST sécurisée accessible sur Internet via **Cloudflare Tunnel**.
 
 ## 📋 Table des matières
 
@@ -14,15 +14,14 @@ Microservice Node.js dockerisé pour piloter un **Switchbot Fingerbot** via Blue
 - [Déploiement](#-déploiement)
 - [Dépannage](#-dépannage)
 - [Sécurité](#-sécurité)
-- [Contribution](#-contribution)
-- [Licence](#-licence)
 
 ---
 
 ## ✨ Fonctionnalités
 
-- ✅ **Contrôle BLE** : Pilotage du Fingerbot via Bluetooth Low Energy
-- ✅ **API REST** : Endpoint simple pour déclencher le Fingerbot
+- ✅ **Architecture Microservices** : Séparation propre entre API métier et contrôle BLE
+- ✅ **BLE Stable** : Service Python avec PySwitchbot (utilisé par Home Assistant)
+- ✅ **API REST Node.js** : API Express simple et légère
 - ✅ **Authentification** : Sécurisation par clé API
 - ✅ **Docker** : Déploiement conteneurisé avec Docker Compose
 - ✅ **Reverse Proxy** : Nginx avec headers de sécurité et compression
@@ -33,6 +32,8 @@ Microservice Node.js dockerisé pour piloter un **Switchbot Fingerbot** via Blue
 ---
 
 ## 🏗️ Architecture
+
+### Vue d'ensemble
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -53,41 +54,73 @@ Microservice Node.js dockerisé pour piloter un **Switchbot Fingerbot** via Blue
                     └──────┬──────────┘
                            │
                     ┌──────▼──────────┐
-                    │ Express API     │
-                    │ (Port 3000)     │
-                    │ - Auth API Key  │
-                    └──────┬──────────┘
-                           │
-                    ┌──────▼──────────┐
-                    │ Bluetooth LE    │
-                    │ (switchbot-ble) │
-                    └──────┬──────────┘
-                           │
-                    ┌──────▼──────────┐
-                    │   Fingerbot     │
-                    │   (WoFingerbot) │
-                    └─────────────────┘
+                    │ Node.js API     │
+                    │ (Port 3000)     │────────────┐
+                    │ - Express       │            │
+                    │ - Auth API Key  │            │ HTTP
+                    └─────────────────┘            │
+                                            ┌──────▼──────────┐
+                                            │ Python BLE      │
+                                            │ Service         │
+                                            │ (Port 4000)     │
+                                            │ - FastAPI       │
+                                            │ - PySwitchbot   │
+                                            └──────┬──────────┘
+                                                   │
+                                            ┌──────▼──────────┐
+                                            │ Bluetooth LE    │
+                                            │ (Raspberry Pi)  │
+                                            └──────┬──────────┘
+                                                   │
+                                            ┌──────▼──────────┐
+                                            │   Fingerbot     │
+                                            │   (WoHand)      │
+                                            └─────────────────┘
 ```
+
+### Architecture Microservices
+
+Ce projet utilise une **architecture microservices** pour séparer les responsabilités :
+
+1. **Node.js API** (Port 3000)
+   - Logique métier et API REST
+   - Authentification et sécurité
+   - Communication HTTP avec le service BLE
+
+2. **Python BLE Service** (Port 4000)
+   - Gestion exclusive du Bluetooth Low Energy
+   - Utilise PySwitchbot (bibliothèque stable et maintenue)
+   - API FastAPI exposant `/scan` et `/press`
+
+**Pourquoi cette architecture ?**
+
+✅ **Stabilité** : PySwitchbot est la bibliothèque BLE SwitchBot la plus stable et maintenue (utilisée par Home Assistant)  
+✅ **Simplicité** : Node.js n'a plus de dépendances natives BLE (pas de node-gyp, pas de compilation C++)  
+✅ **Maintenabilité** : Chaque service a une responsabilité unique  
+✅ **Scalabilité** : Possibilité d'ajouter d'autres appareils SwitchBot facilement  
 
 ### Structure du projet
 
 ```
 fingerbot-service/
+├── ble-service/            # 🐍 Microservice Python BLE
+│   ├── Dockerfile          # Image Python 3.11
+│   ├── requirements.txt    # PySwitchbot, FastAPI, Uvicorn
+│   └── main.py             # API BLE (scan, press)
 ├── src/
-│   ├── api.js          # API REST Express
-│   ├── config.js       # Configuration centralisée
-│   └── fingerbot.js    # Logique de contrôle BLE
+│   ├── api.js              # API REST Express
+│   ├── config.js           # Configuration centralisée
+│   └── fingerbot.js        # Appels HTTP vers BLE service
 ├── nginx/
-│   └── nginx.conf      # Configuration Nginx
+│   └── nginx.conf          # Configuration Nginx
 ├── cloudflare/
-│   ├── config.yml      # Configuration du tunnel
-│   └── fingerbot.json  # Credentials Cloudflare (à créer)
-├── docker-compose.yml  # Orchestration des services
-├── Dockerfile          # Image Docker de l'API
-├── package.json        # Dépendances Node.js
-├── .env.example        # Template des variables d'environnement
-├── .env                # Variables d'environnement (à créer)
-└── README.md           # Ce fichier
+│   ├── config.yml          # Configuration du tunnel
+│   └── fingerbot.json      # Credentials Cloudflare (à créer)
+├── docker-compose.yml      # Orchestration des 4 services
+├── Dockerfile              # Image Docker Node.js (API)
+├── package.json            # Dépendances Node.js (Express, Axios)
+├── .env.example            # Template des variables d'environnement
+└── README.md               # Ce fichier
 ```
 
 ---
@@ -96,7 +129,7 @@ fingerbot-service/
 
 ### Matériel
 - **Raspberry Pi** (ou serveur Linux avec Bluetooth LE)
-- **Switchbot Fingerbot** (modèle WoFingerbot)
+- **Switchbot Fingerbot** (modèle WoHand)
 - Bluetooth 4.0+ (BLE)
 
 ### Logiciels
@@ -163,11 +196,14 @@ FINGERBOT_MAC=XX:XX:XX:XX:XX:XX
 # Clé secrète pour authentifier les requêtes (obligatoire)
 SECRET_API_KEY=VotreCleSuperSecrete123!
 
-# Port de l'API (optionnel, défaut: 3000)
+# Port de l'API Node.js (optionnel, défaut: 3000)
 PORT=3000
 
-# Durée du scan BLE en millisecondes (optionnel, défaut: 3000)
-SCAN_DURATION=3000
+# Durée du scan BLE en secondes (optionnel, défaut: 5)
+SCAN_DURATION=5
+
+# URL du service BLE Python (optionnel, défaut: http://localhost:4000)
+BLE_SERVICE_URL=http://localhost:4000
 ```
 
 > ⚠️ **Important** : Utilisez une clé API forte et unique !
@@ -225,24 +261,18 @@ cloudflared tunnel route dns fingerbot votre-domaine.example.com
 ### Mode Production (recommandé)
 
 ```bash
-# Démarrer tous les services
+# Démarrer tous les services (BLE, API, Nginx, Cloudflare)
 docker-compose up -d
 
 # Vérifier les logs
 docker-compose logs -f
 
+# Vérifier les logs d'un service spécifique
+docker-compose logs -f ble-service
+docker-compose logs -f fingerbot-api
+
 # Arrêter les services
 docker-compose down
-```
-
-### Mode Développement
-
-```bash
-# Installer les dépendances
-npm install
-
-# Démarrer l'API seule (sans Docker)
-npm start
 ```
 
 ### Vérifier le statut
@@ -251,18 +281,25 @@ npm start
 # Vérifier que les conteneurs sont actifs
 docker ps
 
-# Vérifier les logs de l'API
-docker logs fingerbot-api
+# Vous devriez voir :
+# - ble-service (Python BLE)
+# - fingerbot-api (Node.js)
+# - nginx-fingerbot (Reverse proxy)
+# - cloudflare-tunnel (Tunnel)
 
-# Vérifier les logs du tunnel Cloudflare
-docker logs cloudflare-tunnel
+# Tester le service BLE directement
+curl http://localhost:4000/
+
+# Tester l'API Node.js
+curl -X POST http://localhost:3000/fingerbot/press \
+  -H "x-api-key: VotreCleSuperSecrete123!"
 ```
 
 ---
 
 ## 📡 Utilisation de l'API
 
-### Endpoint disponible
+### Endpoints disponibles
 
 #### `POST /fingerbot/press`
 
@@ -274,20 +311,35 @@ x-api-key: VotreCleSuperSecrete123!
 Content-Type: application/json
 ```
 
-**Exemples de requêtes :**
+#### `GET /fingerbot/scan`
 
-**Avec curl (local) :**
+Scanne et détecte les Fingerbot BLE à proximité.
+
+**Headers requis :**
+```
+x-api-key: VotreCleSuperSecrete123!
+```
+
+### Exemples de requêtes
+
+**Appuyer sur le Fingerbot (local) :**
 ```bash
 curl -X POST http://localhost:3000/fingerbot/press \
   -H "x-api-key: VotreCleSuperSecrete123!" \
   -H "Content-Type: application/json"
 ```
 
-**Avec curl (via Cloudflare) :**
+**Appuyer sur le Fingerbot (via Cloudflare) :**
 ```bash
 curl -X POST https://votre-domaine.example.com/fingerbot/press \
   -H "x-api-key: VotreCleSuperSecrete123!" \
   -H "Content-Type: application/json"
+```
+
+**Scanner les Fingerbot à proximité :**
+```bash
+curl -X GET http://localhost:3000/fingerbot/scan \
+  -H "x-api-key: VotreCleSuperSecrete123!"
 ```
 
 **Avec JavaScript (fetch) :**
@@ -338,15 +390,7 @@ print(response.json())
 **❌ Erreur serveur (500) :**
 ```json
 {
-  "error": "Fingerbot introuvable"
-}
-```
-
-ou
-
-```json
-{
-  "error": "FINGERBOT_MAC non défini dans .env"
+  "error": "Message d'erreur détaillé"
 }
 ```
 
@@ -414,33 +458,55 @@ docker-compose up -d --build
 
 ## 🛠️ Dépannage
 
+### Le service BLE ne démarre pas
+
+**Vérifications :**
+```bash
+# 1. Vérifier les logs du service BLE
+docker logs ble-service
+
+# 2. Vérifier que le Bluetooth est activé
+hciconfig
+
+# 3. Redémarrer le Bluetooth
+sudo systemctl restart bluetooth
+
+# 4. Redémarrer le conteneur BLE
+docker-compose restart ble-service
+```
+
 ### Le Fingerbot n'est pas détecté
 
 **Vérifications :**
 ```bash
-# 1. Vérifier que le Bluetooth est activé
-hciconfig
+# 1. Scanner manuellement depuis le conteneur Python
+docker exec -it ble-service python3 -c "
+from switchbot import Switchbot
+import asyncio
+async def scan():
+    sb = Switchbot()
+    devices = await sb.discover(duration=5)
+    print(devices)
+asyncio.run(scan())
+"
 
-# 2. Scanner manuellement
-sudo hcitool lescan
+# 2. Vérifier la portée (distance < 10m)
 
-# 3. Vérifier la portée (distance < 10m)
-
-# 4. Redémarrer le Bluetooth
-sudo systemctl restart bluetooth
-```
-
-**Dans les logs Docker :**
-```bash
-docker logs fingerbot-api
-# Si vous voyez "Fingerbot introuvable", vérifiez l'adresse MAC dans .env
-```
-
-### Erreur "FINGERBOT_MAC non défini"
-
-Vérifiez que le fichier `.env` existe et contient la bonne variable :
-```bash
+# 3. Vérifier l'adresse MAC dans .env
 cat .env | grep FINGERBOT_MAC
+```
+
+### L'API Node.js ne communique pas avec le service BLE
+
+```bash
+# 1. Vérifier que le service BLE répond
+curl http://localhost:4000/
+
+# 2. Vérifier les logs de l'API
+docker logs fingerbot-api
+
+# 3. Vérifier la variable BLE_SERVICE_URL
+docker exec fingerbot-api env | grep BLE_SERVICE_URL
 ```
 
 ### Le tunnel Cloudflare ne fonctionne pas
@@ -456,29 +522,11 @@ cloudflared tunnel info fingerbot
 cloudflared tunnel route dns fingerbot votre-domaine.example.com
 ```
 
-### L'API ne répond pas
+### Erreur "FINGERBOT_MAC non défini"
 
+Vérifiez que le fichier `.env` existe et contient la bonne variable :
 ```bash
-# Vérifier que le conteneur est actif
-docker ps
-
-# Vérifier les logs
-docker logs fingerbot-api
-
-# Tester en local
-curl -X POST http://localhost:3000/fingerbot/press \
-  -H "x-api-key: VotreCleSuperSecrete123!"
-```
-
-### Permissions Bluetooth
-
-Si vous avez des erreurs de permission BLE :
-```bash
-# Ajouter l'utilisateur au groupe bluetooth
-sudo usermod -aG bluetooth $USER
-
-# Redémarrer Docker
-sudo systemctl restart docker
+cat .env | grep FINGERBOT_MAC
 ```
 
 ---
@@ -487,12 +535,14 @@ sudo systemctl restart docker
 
 ### Bonnes pratiques implémentées
 
+✅ **Architecture microservices** : Isolation des services  
+✅ **Service BLE isolé** : Seul le service Python a accès au Bluetooth  
 ✅ **Authentification par clé API** : Toutes les requêtes nécessitent un header `x-api-key`  
 ✅ **Reverse proxy Nginx** : L'API n'est pas exposée directement  
 ✅ **Headers de sécurité** : X-Frame-Options, X-Content-Type-Options, X-XSS-Protection  
 ✅ **Cloudflare Tunnel** : Pas d'ouverture de ports sur le routeur  
 ✅ **Variables d'environnement** : Secrets non versionnés dans Git  
-✅ **Mode production** : `npm install --production` (pas de dépendances de dev)
+✅ **Images Docker optimisées** : Node.js Alpine, Python Slim
 
 ### Recommandations supplémentaires
 
@@ -517,10 +567,10 @@ openssl rand -base64 32
 - [ ] Ajouter des logs structurés (Winston/Pino)
 - [ ] Créer des tests unitaires et d'intégration
 - [ ] Ajouter un système de retry en cas d'échec BLE
-- [ ] Implémenter un timeout configurable pour le scan BLE
 - [ ] Ajouter une interface web pour contrôler le Fingerbot
 - [ ] Support multi-Fingerbot
 - [ ] Webhooks pour notifications
+- [ ] Métriques Prometheus/Grafana
 
 ---
 
@@ -542,19 +592,14 @@ Ce projet est sous licence MIT. Voir le fichier `LICENSE` pour plus de détails.
 
 ---
 
-## 📧 Contact
-
-Pour toute question ou problème, ouvrez une issue sur GitHub.
-
----
-
 ## 🙏 Remerciements
 
-- [Switchbot BLE](https://github.com/OpenWonderLabs/node-switchbot) - Bibliothèque Node.js pour Switchbot
-- [Express.js](https://expressjs.com/) - Framework web minimaliste
+- [PySwitchbot](https://github.com/Danielhiversen/pySwitchbot) - Bibliothèque Python stable pour SwitchBot (utilisée par Home Assistant)
+- [FastAPI](https://fastapi.tiangolo.com/) - Framework API moderne et performant
+- [Express.js](https://expressjs.com/) - Framework web Node.js minimaliste
 - [Cloudflare](https://www.cloudflare.com/) - Tunnel sécurisé
 - [Docker](https://www.docker.com/) - Containerisation
 
 ---
 
-**Fait avec ❤️ pour automatiser votre maison**
+**Fait avec ❤️ pour automatiser votre maison avec une architecture professionnelle et stable**
