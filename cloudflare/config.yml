@@ -1,0 +1,8 @@
+# À remplir après création du tunnel Cloudflare
+tunnel: fingerbot
+credentials-file: /etc/cloudflared/fingerbot.json
+
+ingress:
+  - hostname: fingerbot.example.com
+    service: http://localhost:8080
+  - service: http_status:404
