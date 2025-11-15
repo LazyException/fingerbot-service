@@ -19,3 +19,23 @@ export async function pressFingerbot() {
   await bot.run();
   await bot.disconnect();
 }
+
+export async function scanFingerbot() {
+  const switchbot = new Switchbot();
+
+  const devices = await switchbot.discover({
+    duration: SCAN_DURATION,
+    model: "WoFingerbot"
+  });
+
+  if (devices.length === 0) return null;
+
+  // On retourne le premier Fingerbot détecté
+  const bot = devices[0];
+
+  return {
+    address: bot.address,
+    modelName: bot.modelName,
+    rssi: bot.rssi
+  };
+}
