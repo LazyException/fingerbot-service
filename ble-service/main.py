@@ -4,8 +4,6 @@ from switchbot import GetSwitchbotDevices
 
 app = FastAPI(title="BLE Service", description="Microservice Python pour contrôler SwitchBot via BLE")
 
-SCAN_DURATION = 5
-
 
 class PressRequest(BaseModel):
     mac_address: str = None
@@ -19,10 +17,10 @@ async def root():
 @app.get("/scan")
 async def scan_devices():
     try:
-        # Nouveau scan moderne pyswitchbot
-        devices = await GetSwitchbotDevices().discover(duration=SCAN_DURATION)
+        # Nouvelle API pyswitchbot : discover() SANS argument
+        devices = await GetSwitchbotDevices().discover()
 
-        # devices = dictionnaire : { "aa:bb:...": SwitchbotDevice() }
+        # devices = dict { mac: SwitchBotDevice }
         fingerbots = [
             {
                 "mac_address": dev.address,
@@ -61,18 +59,19 @@ async def press_fingerbot(request: PressRequest):
                 detail="Adresse MAC requise"
             )
 
-        devices = await GetSwitchbotDevices().discover(duration=SCAN_DURATION)
+        # Rediscover sans argument (nouvelle API)
+        devices = await GetSwitchbotDevices().discover()
 
-        target = devices.get(mac_address.lower())
+        device = devices.get(mac_address.lower())
 
-        if not target:
+        if not device:
             raise HTTPException(
                 status_code=404,
                 detail=f"Fingerbot {mac_address} non trouvé"
             )
 
-        # Nouvelle méthode moderne :
-        await target.hand_press()
+        # Nouvelle API : hand_press()
+        await device.hand_press()
 
         return {
             "status": "ok",
